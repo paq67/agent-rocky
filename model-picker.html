@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    background: #111;
+    border: 1px solid #00ff41;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    width: 220px;
+  }
+  .title {
+    padding: 8px 12px 6px;
+    font-size: 11px;
+    color: #555;
+    border-bottom: 1px solid #222;
+  }
+  .model-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #1a1a1a;
+    gap: 8px;
+    transition: background 0.1s;
+  }
+  .model-row:hover { background: #1a1a1a; }
+  .model-row.selected { background: #0d1f0d; }
+  .dot { font-size: 14px; width: 16px; flex-shrink: 0; }
+  .model-row.selected .dot { color: #00ff41; }
+  .model-row:not(.selected) .dot { color: #333; }
+  .label { flex: 1; font-size: 13px; color: #ccc; }
+  .model-row.selected .label { color: #00ff41; }
+  .tag { font-size: 10px; color: #444; }
+  .model-row.selected .tag { color: #006620; }
+</style>
+</head>
+<body>
+  <div class="title">rocky brain</div>
+  <div class="model-row" id="row-llama-3.1-8b" onclick="pick('llama-3.1-8b')">
+    <span class="dot">●</span>
+    <span class="label">Llama 3.1 8B</span>
+    <span class="tag">Groq Free</span>
+  </div>
+  <div class="model-row" id="row-llama-3.3-70b" onclick="pick('llama-3.3-70b')">
+    <span class="dot">○</span>
+    <span class="label">Llama 3.3 70B</span>
+    <span class="tag">Groq Free</span>
+  </div>
+  <div class="model-row" id="row-mixtral-8x7b" onclick="pick('mixtral-8x7b')">
+    <span class="dot">○</span>
+    <span class="label">Mixtral 8x7B</span>
+    <span class="tag">Groq Free</span>
+  </div>
+  <div class="model-row" id="row-big-pickle" onclick="pick('big-pickle')">
+    <span class="dot">○</span>
+    <span class="label">Big Pickle</span>
+    <span class="tag">Zen Free</span>
+  </div>
+  <div class="model-row" id="row-minimax-m2.5" onclick="pick('minimax-m2.5')">
+    <span class="dot">○</span>
+    <span class="label">MiniMax M2.5</span>
+    <span class="tag">Zen Free</span>
+  </div>
+
+  <script>
+    let current = localStorage.getItem('rocky-model') || 'llama-3.1-8b'
+
+    updateUI()
+
+    function updateUI() {
+      document.querySelectorAll('.model-row').forEach(r => {
+        const key = r.id.replace('row-', '')
+        const sel = key === current
+        r.classList.toggle('selected', sel)
+        r.querySelector('.dot').textContent = sel ? '●' : '○'
+      })
+    }
+
+    async function pick(key) {
+      current = key
+      localStorage.setItem('rocky-model', key)
+      updateUI()
+      await window.rocky.selectModel(key)
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') window.rocky.closePicker()
+    })
+
+    window.addEventListener('blur', () => {
+      setTimeout(() => window.rocky.closePicker(), 150)
+    })
+  </script>
+</body>
+</html>

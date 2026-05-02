@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent !important;
+      overflow: hidden;
+      width: 80px;
+      height: 100px;
+      -webkit-app-region: no-drag;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <img id="rocky"
+    src="walkleft1.png"
+    width="64" height="64"
+    style="
+      position: absolute;
+      bottom: 4px;
+      left: 0px;
+      image-rendering: pixelated;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    "
+  />
+
+  <div id="bubble" style="
+    position:absolute;
+    bottom:72px;
+    left:0px;
+    background:#111;
+    border:1px solid #00ff41;
+    border-radius:6px;
+    padding:4px 8px;
+    font-family:'Courier New',monospace;
+    font-size:11px;
+    color:#00ff41;
+    white-space:nowrap;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity 0.3s;
+    max-width:180px;
+    word-break:break-word;
+    white-space:normal;
+    z-index:9999;
+  "></div>
+
+  <script>
+    let rockyEl = document.getElementById('rocky')
+    const SPRITE = {
+      walk0: 'walkleft1.png',
+      walk1: 'walkleft2.png',
+      stand: 'stand.png',
+      jazz0: 'jazz1.png',
+      jazz1: 'jazz2.png',
+      jazz2: 'jazz3.png',
+      think: 'stand.png',
+      sleep: 'stand.png'
+    }
+    const EMOJI = {
+      walk0:'🪨', walk1:'🪨', stand:'🪨',
+      jazz0:'💃', jazz1:'💃', jazz2:'💃',
+      think:'🤔', sleep:'😴'
+    }
+    let useEmoji = false
+
+
+    function setSprite(key) {
+      if (useEmoji) {
+        rockyEl.textContent = EMOJI[key] || '🪨'
+        return
+      }
+      rockyEl.src = SPRITE[key] || SPRITE.stand
+      rockyEl.onerror = () => {
+        useEmoji = true
+        const span = document.createElement('span')
+        span.id = 'rocky'
+        span.style.cssText = 'position:absolute;bottom:4px;left:0px;font-size:48px;line-height:1;cursor:pointer;-webkit-app-region:no-drag;'
+        span.textContent = EMOJI[key] || '🪨'
+        rockyEl.replaceWith(span)
+        rockyEl = span
+        bindRockyClick()
+      }
+    }
+
+    let rockyX = 0
+    let rockyY = 0
+    let dir = 1
+    let state = 'walk'
+    let frameIdx = 0
+    let chatOpen = false
+    let terminated = false
+    let sleeping = false
+
+    // Initialize position, then start walk loop
+    window.rocky.getRockyPos().then(pos => {
+      rockyX = pos.x
+      rockyY = pos.y
+
+      // POSITION LOOP — 60fps
+      setInterval(() => {
+        if (chatOpen || sleeping || isDragging) return
+        rockyX += dir * 2
+        const maxX = window.screen.availWidth - 80
+        if (rockyX >= maxX) { rockyX = maxX; dir = -1 }
+        if (rockyX <= 0)    { rockyX = 0;    dir =  1 }
+        window.rocky.moveRocky(rockyX, rockyY)
+        rockyEl.style.transform = dir < 0 ? 'scaleX(-1)' : 'scaleX(1)'
+      }, 16)
+    })
+
+    // SPRITE SWAP LOOP — 8fps
+    const spriteLoop = setInterval(() => {
+      if (sleeping || chatOpen) return
+      if (state === 'walk') {
+        frameIdx = frameIdx === 0 ? 1 : 0
+        setSprite('walk' + frameIdx)
+      }
+    }, 125)
+
+    let isDragging = false
+    let dragStartScreenX = 0
+    let dragStartScreenY = 0
+    let dragStartWinX = 0
+    let dragStartWinY = 0
+
+    function bindRockyClick() {
+      rockyEl.addEventListener('mousedown', async (e) => {
+        if (e.button !== 0) return
+        isDragging = true
+        dragStartScreenX = e.screenX
+        dragStartScreenY = e.screenY
+        const pos = await window.rocky.getRockyPos()
+        dragStartWinX = pos.x
+        dragStartWinY = pos.y
+        rockyX = pos.x
+        rockyY = pos.y
+        e.preventDefault()
+      })
+    }
+    bindRockyClick()
+
+    window.addEventListener('mousemove', async (e) => {
+      if (!isDragging) return
+      const dx = e.screenX - dragStartScreenX
+      const dy = e.screenY - dragStartScreenY
+      const newX = dragStartWinX + dx
+      const newY = dragStartWinY + dy
+      await window.rocky.moveRocky(newX, newY)
+      rockyX = newX
+      rockyY = newY
+    })
+
+    window.addEventListener('mouseup', (e) => {
+      if (isDragging && Math.abs(e.screenX - dragStartScreenX) < 5 && Math.abs(e.screenY - dragStartScreenY) < 5) {
+        handleRockyClick()
+      }
+      isDragging = false
+    })
+
+    let terminateMsgIdx = 0
+    const TERMINATE_MSGS = ['rocky sleep 😴', 'rocky busy 🔴', 'rocky miss thanu 🥺']
+
+    window.addEventListener('message', (e) => { /* not used */ })
+
+    window.rocky.onTerminateToggle(() => {
+      terminated = !terminated
+      sleeping = terminated
+      if (terminated) {
+        setSprite('sleep')
+        showBubble('zzz...', 3000)
+      } else {
+        state = 'walk'
+        setSprite('walk0')
+        showBubble('rocky back!', 2000)
+      }
+    })
+
+    window.rocky.onWake(() => {
+      terminated = false
+      sleeping = false
+      state = 'walk'
+      setSprite('walk0')
+      showBubble('rocky ready!', 2000)
+    })
+
+    function handleRockyClick() {
+      if (terminated) {
+        showBubble(TERMINATE_MSGS[terminateMsgIdx % 3], 3000)
+        terminateMsgIdx++
+        return
+      }
+      window.rocky.openPicker()
+    }
+
+    const bubbleEl = document.getElementById('bubble')
+    let bubbleTimer = null
+
+    function showBubble(text, duration=2500) {
+      bubbleEl.textContent = text
+      bubbleEl.style.opacity = '1'
+      const bLeft = Math.min(rockyX, window.screen.availWidth - 200)
+      bubbleEl.style.left = Math.max(0, bLeft) + 'px'
+      clearTimeout(bubbleTimer)
+      bubbleTimer = setTimeout(() => { bubbleEl.style.opacity = '0' }, duration)
+    }
+
+    const IDLE_MSGS = ['just chillin','click me!','rocky ready','big brain activate','*walks*','bored. chat me.']
+    setInterval(() => {
+      if (!sleeping && !chatOpen && Math.random() < 0.4) {
+        showBubble(IDLE_MSGS[Math.floor(Math.random() * IDLE_MSGS.length)])
+      }
+    }, 15000 + Math.random() * 30000)
+  </script>
+</body>
+</html>

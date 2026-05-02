@@ -1,0 +1,17 @@
+{
+  "name": "rocky-agent",
+  "version": "1.0.0",
+  "description": "Windows desktop AI companion — port of github.com/itmesneha/agentrocky using OpenCode Zen",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}

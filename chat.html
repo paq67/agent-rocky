@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    background: #0a0a0a;
+    color: #00ff41;
+    font-family: 'Courier New', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #1a1a1a;
+    flex-shrink: 0;
+    gap: 8px;
+    -webkit-app-region: drag;
+  }
+  #header-title { flex:1; font-size:13px; font-weight:bold; color:#00ff41; }
+  #header-model {
+    font-size:11px; color:#555; cursor:pointer;
+    -webkit-app-region: no-drag;
+  }
+  #header-model:hover { color:#00ff41; }
+  #close-btn {
+    font-size:16px; color:#444; cursor:pointer; line-height:1;
+    -webkit-app-region: no-drag;
+  }
+  #close-btn:hover { color:#ff4444; }
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  #log::-webkit-scrollbar { width:4px; }
+  #log::-webkit-scrollbar-track { background:#111; }
+  #log::-webkit-scrollbar-thumb { background:#00ff41; }
+  .msg { font-size:13px; line-height:1.5; word-break:break-word; }
+  .msg-user      { color:#ffffff; }
+  .msg-user::before { content:'you > '; color:#555; }
+  .msg-assistant { color:#00ff41; }
+  .msg-assistant::before { content:'rocky > '; color:#006620; }
+  .msg-error     { color:#ff4444; font-style:italic; }
+  .msg-error::before { content:'error > '; }
+  .msg-exhausted { color:#ff4444; font-style:italic; }
+  .msg-exhausted::before { content:'rocky > '; }
+  .switch-link {
+    color:#00aaff; cursor:pointer; text-decoration:underline;
+    font-size:12px; margin-top:4px; display:inline-block;
+  }
+  #input-row {
+    display:flex; gap:8px; padding:8px 12px;
+    border-top:1px solid #1a1a1a; flex-shrink:0;
+  }
+  #chat-input {
+    flex:1; background:#111; border:1px solid #333; color:#00ff41;
+    font-family:'Courier New',monospace; font-size:13px;
+    padding:6px 10px; border-radius:4px; outline:none;
+  }
+  #chat-input:focus { border-color:#00ff41; }
+  #chat-input:disabled { opacity:0.4; cursor:not-allowed; }
+  #send-btn {
+    background:transparent; border:1px solid #333; color:#00ff41;
+    font-family:'Courier New',monospace; font-size:12px;
+    padding:6px 14px; border-radius:4px; cursor:pointer;
+  }
+  #send-btn:hover { border-color:#00ff41; }
+  #send-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .typing-dots::after {
+    content: '...';
+    animation: dots 1s steps(3,end) infinite;
+  }
+  @keyframes dots {
+    0%,20%  { content:'.'; }
+    40%     { content:'..'; }
+    60%,100%{ content:'...'; }
+  }
+</style>
+</head>
+<body>
+  <div id="header">
+    <span id="header-title">rocky terminal</span>
+    <span id="header-model" onclick="openPicker()">big-pickle</span>
+    <span id="close-btn" onclick="closeChat()">×</span>
+  </div>
+  <div id="log"></div>
+  <div id="input-row">
+    <input id="chat-input" type="text" placeholder='ask rocky anything...' autocomplete="off" />
+    <button id="send-btn">send</button>
+  </div>
+
+<script>
+  const log = document.getElementById('log')
+  const input = document.getElementById('chat-input')
+  const sendBtn = document.getElementById('send-btn')
+  const headerModel = document.getElementById('header-model')
+
+  let history = []
+  let currentModel = localStorage.getItem('rocky-model') || 'llama-3.1-8b'
+  let exhausted = false
+
+  async function initHeader() {
+    const config = await window.rocky.getConfig()
+    headerModel.textContent = config.label
+  }
+  initHeader()
+
+
+  function appendMsg(role, text, extra) {
+    const d = document.createElement('div')
+    d.className = 'msg msg-' + role
+    d.textContent = text
+    if (extra) d.appendChild(extra)
+    log.appendChild(d)
+    log.scrollTop = log.scrollHeight
+    return d
+  }
+
+  function setExhausted(message) {
+    exhausted = true
+    input.disabled = true
+    sendBtn.disabled = true
+    const link = document.createElement('span')
+    link.className = 'switch-link'
+    link.textContent = ' [switch model →]'
+    link.onclick = openPicker
+    appendMsg('exhausted', message, link)
+  }
+
+  function resetExhausted() {
+    exhausted = false
+    input.disabled = false
+    sendBtn.disabled = false
+    input.focus()
+  }
+
+  async function send() {
+    if (exhausted) return
+    const text = input.value.trim()
+    if (!text) return
+    input.value = ''
+    input.disabled = true
+    sendBtn.disabled = true
+
+    appendMsg('user', text)
+    history.push({ role: 'user', content: text })
+
+    const typing = document.createElement('div')
+    typing.className = 'msg msg-assistant typing-dots'
+    typing.textContent = 'rocky thinking'
+    log.appendChild(typing)
+    log.scrollTop = log.scrollHeight
+
+    const result = await window.rocky.sendMessage(text, history, currentModel)
+
+    typing.remove()
+
+    if (result.ok) {
+      history.push({ role: 'assistant', content: result.reply })
+      appendMsg('assistant', result.reply)
+    } else if (result.type === 'EXHAUSTED') {
+      setExhausted(result.message)
+    } else {
+      appendMsg('error', result.message || 'unknown error')
+    }
+
+    if (!exhausted) {
+      input.disabled = false
+      sendBtn.disabled = false
+      input.focus()
+    }
+  }
+
+  function openPicker() { window.rocky.openPicker() }
+  function closeChat() {
+    history = []
+    resetExhausted()
+    window.rocky.toggleChat()
+  }
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+  })
+  sendBtn.addEventListener('click', send)
+
+  window.rocky.onModelChange((data) => {
+    currentModel = data.model
+    headerModel.textContent = data.label || data.model
+    resetExhausted()
+    appendMsg('assistant', `switched to ${data.label || currentModel}. what do you need?`)
+  })
+
+
+  appendMsg('assistant', 'yo. i am rocky. what do you need?')
+  input.focus()
+</script>
+</body>
+</html>
